@@ -1,31 +1,43 @@
-const CACHE_NAME = "timer-dashboard-v1";
-const ASSETS = [
-  "./index.html",
-  "./manifest.json",
-  "./alarm.mp3",
-  "./icon-192.png",
-  "./icon-512.png"
+const CACHE_NAME = 'timer-dashboard-v1';
+const FILES_TO_CACHE = [
+  '/',
+  '/index.html',
+  '/alarm.mp3',
+  '/manifest.json'
 ];
 
-// Install SW
-self.addEventListener("install", e => {
-  e.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS))
+// Install: cache files
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then((cache) => cache.addAll(FILES_TO_CACHE))
+      .then(() => self.skipWaiting()) // activate immediately
   );
 });
 
-// Serve cached files
-self.addEventListener("fetch", e => {
-  e.respondWith(
-    caches.match(e.request).then(res => res || fetch(e.request))
-  );
-});
-
-// Update cache
-self.addEventListener("activate", e => {
-  e.waitUntil(
+// Activate: clean old caches
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
     caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
-    )
+      Promise.all(
+        keys.map(key => {
+          if (key !== CACHE_NAME) return caches.delete(key);
+        })
+      )
+    ).then(() => self.clients.claim())
+  );
+});
+
+// Fetch: always try network first, fallback to cache
+self.addEventListener('fetch', (event) => {
+  event.respondWith(
+    fetch(event.request)
+      .then((response) => {
+        return caches.open(CACHE_NAME).then(cache => {
+          cache.put(event.request, response.clone());
+          return response;
+        });
+      })
+      .catch(() => caches.match(event.request))
   );
 });
