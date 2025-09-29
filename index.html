@@ -4,7 +4,6 @@
 <head>
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#007bff">
-
   <meta charset="UTF-8">
   <title>Timer Dashboard</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -163,6 +162,7 @@
     <button onclick="addTimer()">Add</button>
     <button onclick="toggleDark()">Dark Mode</button>
     <button onclick="toggleFullscreen()">Full Screen</button>
+    <button id="wakeLockToggle" onclick="toggleManualWakeLock()">Keep Screen On</button>
   </div>
 
   <div id="timers"></div>
@@ -175,6 +175,49 @@
     let currentFlashing = false;
     const alarm = document.getElementById("alarmSound");
 
+    // --- Wake Lock API ---
+    let wakeLock = null;
+    let manualWakeLock = false;
+
+    async function requestWakeLock() {
+      try {
+        wakeLock = await navigator.wakeLock.request("screen");
+        console.log("Wake lock active");
+
+        wakeLock.addEventListener("release", () => {
+          console.log("Wake lock released");
+        });
+
+        document.addEventListener("visibilitychange", async () => {
+          if (wakeLock !== null && document.visibilityState === "visible") {
+            wakeLock = await navigator.wakeLock.request("screen");
+          }
+        });
+      } catch (err) {
+        console.error("WakeLock error:", err.name, err.message);
+      }
+    }
+
+    function releaseWakeLock() {
+      if (wakeLock !== null) {
+        wakeLock.release();
+        wakeLock = null;
+      }
+    }
+
+    async function toggleManualWakeLock() {
+      manualWakeLock = !manualWakeLock;
+      const btn = document.getElementById("wakeLockToggle");
+      btn.textContent = manualWakeLock ? "Screen Lock: ON" : "Keep Screen On";
+
+      if (manualWakeLock) {
+        await requestWakeLock();
+      } else {
+        if (!Object.values(timers).some(t => t.running)) releaseWakeLock();
+      }
+    }
+
+    // --- Timer logic ---
     function format(ms) {
       const sec = Math.floor(ms / 1000);
       const h = String(Math.floor(sec / 3600)).padStart(2, "0");
@@ -231,10 +274,10 @@
     }
 
     function startTimer(label) {
-      // Stop all other timers
       Object.keys(timers).forEach(l => stopTimer(l));
       timers[label].running = true;
       timers[label].lastStart = Date.now();
+      requestWakeLock();
       saveTimers();
     }
 
@@ -242,6 +285,11 @@
       if (!timers[label].running) return;
       timers[label].elapsed += Date.now() - timers[label].lastStart;
       timers[label].running = false;
+
+      if (!manualWakeLock && !Object.values(timers).some(t => t.running)) {
+        releaseWakeLock();
+      }
+
       saveTimers();
     }
 
@@ -249,6 +297,11 @@
       timers[label].elapsed = 0;
       timers[label].running = false;
       updateDisplay(label);
+
+      if (!manualWakeLock && !Object.values(timers).some(t => t.running)) {
+        releaseWakeLock();
+      }
+
       saveTimers();
     }
 
@@ -256,6 +309,11 @@
       stopTimer(label);
       delete timers[label];
       document.getElementById(`timer-${label}`).remove();
+
+      if (!manualWakeLock && !Object.values(timers).some(t => t.running)) {
+        releaseWakeLock();
+      }
+
       saveTimers();
     }
 
@@ -322,6 +380,7 @@
     }, 500);
 
     restoreTimers();
+
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("service-worker.js")
         .then(() => console.log("SW registered"))
