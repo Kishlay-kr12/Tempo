@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#007bff">
+
+  <meta charset="UTF-8">
+  <title>Timer Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      font-family: sans-serif;
+      background: #121212;
+      color: #f5f5f5;
+      padding: 20px;
+      transition: background 0.2s, color 0.2s;
+    }
+
+    body.dark {
+      background: #121212;
+      color: #f5f5f5;
+    }
+
+    body.flash-light {
+      animation: flashBg 0.7s infinite alternate;
+    }
+
+    body.flash-dark {
+      animation: flashBgDark 0.7s infinite alternate;
+    }
+
+    @keyframes flashBg {
+      0% {
+        background: #ffff00;
+        color: #000000;
+      }
+
+      50% {
+        background: #000000;
+        color: #ffff00;
+      }
+
+      100% {
+        background: #ffff00;
+        color: #000000;
+      }
+    }
+
+    @keyframes flashBgDark {
+      0% {
+        background: #ffff00;
+        color: #222222;
+      }
+
+      50% {
+        background: #222222;
+        color: #ffff00;
+      }
+
+      100% {
+        background: #ffff00;
+        color: #222222;
+      }
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .controls {
+      margin-bottom: 20px;
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    input,
+    button {
+      padding: 10px;
+      font-size: 1em;
+      border-radius: 8px;
+    }
+
+    button {
+      border: none;
+      background: #007bff;
+      color: white;
+      cursor: pointer;
+    }
+
+    button:active {
+      transform: scale(0.97);
+    }
+
+    #timers {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 15px;
+    }
+
+    .timer {
+      background: #1e1e1e;
+      border-radius: 12px;
+      box-shadow: 0 2px 6px rgba(255, 255, 255, 0.1);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .label {
+      font-weight: bold;
+      margin-bottom: 8px;
+      font-size: 1.2em;
+    }
+
+    .time {
+      font-size: 2em;
+      margin-bottom: 12px;
+    }
+
+    .target input,
+    .flash-option input {
+      width: 100px;
+      text-align: center;
+      margin-left: 5px;
+    }
+
+    .timer-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .timer-buttons button {
+      flex: 1 1 40%;
+    }
+
+    .delete-btn {
+      background: #dc3545;
+    }
+
+    .flash-option {
+      margin-bottom: 8px;
+      margin-top: 4px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>Timer Dashboard</h1>
+
+  <div class="controls">
+    <input type="text" id="newLabel" placeholder="New timer name">
+    <button onclick="addTimer()">Add</button>
+    <button onclick="toggleDark()">Dark Mode</button>
+    <button onclick="toggleFullscreen()">Full Screen</button>
+  </div>
+
+  <div id="timers"></div>
+
+  <audio id="alarmSound" src="alarm.mp3" preload="auto"></audio>
+
+  <script>
+    let timers = {};
+    const timersDiv = document.getElementById("timers");
+    let currentFlashing = false;
+    const alarm = document.getElementById("alarmSound");
+
+    function format(ms) {
+      const sec = Math.floor(ms / 1000);
+      const h = String(Math.floor(sec / 3600)).padStart(2, "0");
+      const m = String(Math.floor((sec % 3600) / 60)).padStart(2, "0");
+      const s = String(sec % 60).padStart(2, "0");
+      return `${h}:${m}:${s}`;
+    }
+
+    function saveTimers() { localStorage.setItem("timers", JSON.stringify(timers)); }
+
+    function restoreTimers() {
+      const saved = localStorage.getItem("timers");
+      if (!saved) { ["Gaming", "Study", "Workout", "Break"].forEach(addTimer); return; }
+      timers = JSON.parse(saved);
+      Object.keys(timers).forEach(renderTimer);
+    }
+
+    function addTimer(label) {
+      if (!label) {
+        label = document.getElementById("newLabel").value.trim();
+        if (!label) return;
+        document.getElementById("newLabel").value = "";
+      }
+      if (timers[label]) return;
+      timers[label] = { running: false, elapsed: 0, lastStart: 0, target: 0, flashOnTarget: true };
+      renderTimer(label);
+      saveTimers();
+    }
+
+    function renderTimer(label) {
+      if (document.getElementById(`timer-${label}`)) return;
+      const div = document.createElement("div");
+      div.className = "timer";
+      div.id = `timer-${label}`;
+      div.innerHTML = `
+        <div class="label">${label}</div>
+        <div class="time" id="${label}-time">00:00:00</div>
+        <div class="target">Target (min): <input type="number" id="${label}-target" min="0" value="${timers[label].target / 60000 || 0}"></div>
+        <div class="flash-option"><label><input type="checkbox" id="${label}-flash" ${timers[label].flashOnTarget ? "checked" : ""}> Flash on target</label></div>
+        <div class="timer-buttons">
+          <button id="${label}-start">Start</button>
+          <button id="${label}-stop">Stop</button>
+          <button id="${label}-reset">Reset</button>
+          <button id="${label}-delete" class="delete-btn">Delete</button>
+        </div>`;
+      timersDiv.appendChild(div);
+
+      document.getElementById(`${label}-start`).onclick = () => startTimer(label);
+      document.getElementById(`${label}-stop`).onclick = () => stopTimer(label);
+      document.getElementById(`${label}-reset`).onclick = () => resetTimer(label);
+      document.getElementById(`${label}-delete`).onclick = () => deleteTimer(label);
+      document.getElementById(`${label}-target`).oninput = e => { timers[label].target = Number(e.target.value) * 60000; saveTimers(); };
+      document.getElementById(`${label}-flash`).onchange = e => { timers[label].flashOnTarget = e.target.checked; saveTimers(); };
+    }
+
+    function startTimer(label) {
+      // Stop all other timers
+      Object.keys(timers).forEach(l => stopTimer(l));
+      timers[label].running = true;
+      timers[label].lastStart = Date.now();
+      saveTimers();
+    }
+
+    function stopTimer(label) {
+      if (!timers[label].running) return;
+      timers[label].elapsed += Date.now() - timers[label].lastStart;
+      timers[label].running = false;
+      saveTimers();
+    }
+
+    function resetTimer(label) {
+      timers[label].elapsed = 0;
+      timers[label].running = false;
+      updateDisplay(label);
+      saveTimers();
+    }
+
+    function deleteTimer(label) {
+      stopTimer(label);
+      delete timers[label];
+      document.getElementById(`timer-${label}`).remove();
+      saveTimers();
+    }
+
+    function updateDisplay(label) {
+      if (!timers[label]) return;
+      let elapsed = timers[label].elapsed;
+      if (timers[label].running) elapsed += Date.now() - timers[label].lastStart;
+      document.getElementById(`${label}-time`).textContent = format(elapsed);
+    }
+
+    function checkFlashing() {
+      const anyTriggered = Object.values(timers).some(
+        t => t.running &&
+          t.target > 0 &&
+          (t.elapsed + (t.running ? Date.now() - t.lastStart : 0)) >= t.target &&
+          t.flashOnTarget
+      );
+
+      if (anyTriggered) {
+        startFlashing();
+        playAlarm();
+      } else {
+        stopFlashing();
+      }
+    }
+
+    function startFlashing() {
+      if (currentFlashing) return;
+      currentFlashing = true;
+      const flashClass = document.body.classList.contains("dark") ? "flash-dark" : "flash-light";
+      document.body.classList.add(flashClass);
+    }
+
+    function stopFlashing() {
+      if (!currentFlashing) return;
+      currentFlashing = false;
+      document.body.classList.remove("flash-light", "flash-dark");
+      alarm.pause();
+      alarm.currentTime = 0;
+    }
+
+    function playAlarm() {
+      if (alarm.paused) {
+        alarm.currentTime = 0;
+        alarm.play();
+      }
+    }
+
+    function toggleDark() {
+      document.body.classList.toggle("dark");
+    }
+
+    function toggleFullscreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(err => alert(err.message));
+      } else {
+        document.exitFullscreen();
+      }
+    }
+
+    setInterval(() => {
+      Object.keys(timers).forEach(updateDisplay);
+      checkFlashing();
+    }, 500);
+
+    restoreTimers();
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("service-worker.js")
+        .then(() => console.log("SW registered"))
+        .catch(err => console.error("SW failed", err));
+    }
+  </script>
+</body>
+</html>
