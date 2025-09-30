@@ -124,11 +124,24 @@
       margin-bottom: 12px;
     }
 
-    .target input,
-    .flash-option input {
-      width: 100px;
+    /* Target row fix */
+    .target {
+      margin-bottom: 8px;
+      margin-top: 4px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .target div {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .target input {
+      width: 80px;
       text-align: center;
-      margin-left: 5px;
     }
 
     .timer-buttons {
@@ -249,7 +262,7 @@
         lastStart: 0,
         target: 0,
         flashOnTarget: true,
-        maskTime: false, // new property
+        maskTime: false,
       };
       renderTimer(label);
       saveTimers();
@@ -267,8 +280,10 @@
       </div>
       <div class="time" id="${label}-time">00:00:00</div>
       <div class="target">
-        Target (min): 
-        <input type="number" id="${label}-target" min="0" value="${timers[label].target / 60000 || 0}">
+        <div>
+          Target (min): 
+          <input type="number" id="${label}-target" min="0" value="${timers[label].target / 60000 || 0}">
+        </div>
         <button id="${label}-plus10">+10 min</button>
       </div>
       <div class="flash-option">
@@ -412,14 +427,14 @@
         return;
       }
 
-      if (!confirm("Do you really want to export the timers?")) return; // Confirmation added
+      if (!confirm("Do you really want to export the timers?")) return;
 
       const today = new Date().toISOString().slice(0, 10);
       let newRows = "";
       for (let label in timers) {
         const t = timers[label];
         newRows += `${today},${label},${format(t.elapsed)},${format(t.target)},${t.flashOnTarget}\n`;
-        resetTimer(label); // reset after export
+        resetTimer(label);
       }
 
       let csv = localStorage.getItem("exportCSV");
@@ -439,10 +454,8 @@
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      saveTimers(); // keep the timers structure, just reset
+      saveTimers();
     }
-
-
 
     setInterval(() => {
       Object.keys(timers).forEach(updateDisplay);
