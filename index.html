@@ -114,6 +114,9 @@
       font-weight: bold;
       margin-bottom: 8px;
       font-size: 1.2em;
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
 
     .time {
@@ -163,6 +166,7 @@
     <button onclick="toggleDark()">Dark M.</button>
     <button onclick="toggleFullscreen()">Full Screen</button>
     <button id="wakeLockToggle" onclick="toggleManualWakeLock()">Keep Screen On</button>
+    <button onclick="exportTimers()">Export</button>
   </div>
 
   <div id="timers"></div>
@@ -182,12 +186,7 @@
     async function requestWakeLock() {
       try {
         wakeLock = await navigator.wakeLock.request("screen");
-        console.log("Wake lock active");
-
-        wakeLock.addEventListener("release", () => {
-          console.log("Wake lock released");
-        });
-
+        wakeLock.addEventListener("release", () => console.log("Wake lock released"));
         document.addEventListener("visibilitychange", async () => {
           if (wakeLock !== null && document.visibilityState === "visible") {
             wakeLock = await navigator.wakeLock.request("screen");
@@ -253,7 +252,10 @@
       div.className = "timer";
       div.id = `timer-${label}`;
       div.innerHTML = `
-        <div class="label">${label}</div>
+        <div class="label">
+          <span id="${label}-label-text">${label}</span>
+          <button onclick="editLabel('${label}')">✏️</button>
+        </div>
         <div class="time" id="${label}-time">00:00:00</div>
         <div class="target">Target (min): <input type="number" id="${label}-target" min="0" value="${timers[label].target / 60000 || 0}"></div>
         <div class="flash-option"><label><input type="checkbox" id="${label}-flash" ${timers[label].flashOnTarget ? "checked" : ""}> Flash on target</label></div>
@@ -273,6 +275,20 @@
       document.getElementById(`${label}-flash`).onchange = e => { timers[label].flashOnTarget = e.target.checked; saveTimers(); };
     }
 
+    function editLabel(oldLabel) {
+      const newLabel = prompt("Enter new label name:", oldLabel);
+      if (!newLabel || newLabel === oldLabel) return;
+      if (timers[newLabel]) {
+        alert("That label already exists!");
+        return;
+      }
+      timers[newLabel] = { ...timers[oldLabel] };
+      delete timers[oldLabel];
+      document.getElementById(`timer-${oldLabel}`).remove();
+      renderTimer(newLabel);
+      saveTimers();
+    }
+
     function startTimer(label) {
       Object.keys(timers).forEach(l => stopTimer(l));
       timers[label].running = true;
@@ -289,7 +305,6 @@
       if (!manualWakeLock && !Object.values(timers).some(t => t.running)) {
         releaseWakeLock();
       }
-
       saveTimers();
     }
 
@@ -301,7 +316,6 @@
       if (!manualWakeLock && !Object.values(timers).some(t => t.running)) {
         releaseWakeLock();
       }
-
       saveTimers();
     }
 
@@ -313,7 +327,6 @@
       if (!manualWakeLock && !Object.values(timers).some(t => t.running)) {
         releaseWakeLock();
       }
-
       saveTimers();
     }
 
@@ -326,10 +339,7 @@
 
     function checkFlashing() {
       const anyTriggered = Object.values(timers).some(
-        t => t.running &&
-          t.target > 0 &&
-          (t.elapsed + (t.running ? Date.now() - t.lastStart : 0)) >= t.target &&
-          t.flashOnTarget
+        t => t.running && t.target > 0 && (t.elapsed + (t.running ? Date.now() - t.lastStart : 0)) >= t.target && t.flashOnTarget
       );
 
       if (anyTriggered) {
@@ -362,9 +372,7 @@
       }
     }
 
-    function toggleDark() {
-      document.body.classList.toggle("dark");
-    }
+    function toggleDark() { document.body.classList.toggle("dark"); }
 
     function toggleFullscreen() {
       if (!document.fullscreenElement) {
@@ -373,6 +381,44 @@
         document.exitFullscreen();
       }
     }
+
+    function exportTimers() {
+      if (!Object.keys(timers).length) {
+        alert("No timers to export.");
+        return;
+      }
+
+      if (!confirm("Do you really want to export the timers?")) return; // Confirmation added
+
+      const today = new Date().toISOString().slice(0, 10);
+      let newRows = "";
+      for (let label in timers) {
+        const t = timers[label];
+        newRows += `${today},${label},${format(t.elapsed)},${format(t.target)},${t.flashOnTarget}\n`;
+        resetTimer(label); // reset after export
+      }
+
+      let csv = localStorage.getItem("exportCSV");
+      if (!csv) {
+        csv = "Date,Label,Elapsed (HH:MM:SS),Target (HH:MM:SS),FlashOnTarget\n";
+      }
+      csv += newRows;
+      localStorage.setItem("exportCSV", csv);
+
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "timers_log.csv";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      saveTimers(); // keep the timers structure, just reset
+    }
+
+
 
     setInterval(() => {
       Object.keys(timers).forEach(updateDisplay);
@@ -388,5 +434,5 @@
     }
   </script>
 </body>
-</html>
 
+</html>
