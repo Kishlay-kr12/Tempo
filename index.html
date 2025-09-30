@@ -217,11 +217,13 @@
     }
 
     // --- Timer logic ---
-    function format(ms) {
+    function format(ms, mask = false) {
       const sec = Math.floor(ms / 1000);
       const h = String(Math.floor(sec / 3600)).padStart(2, "0");
       const m = String(Math.floor((sec % 3600) / 60)).padStart(2, "0");
       const s = String(sec % 60).padStart(2, "0");
+
+      if (mask) return `XX:XX:${s}`;
       return `${h}:${m}:${s}`;
     }
 
@@ -241,7 +243,14 @@
         document.getElementById("newLabel").value = "";
       }
       if (timers[label]) return;
-      timers[label] = { running: false, elapsed: 0, lastStart: 0, target: 0, flashOnTarget: true };
+      timers[label] = {
+        running: false,
+        elapsed: 0,
+        lastStart: 0,
+        target: 0,
+        flashOnTarget: true,
+        maskTime: false, // new property
+      };
       renderTimer(label);
       saveTimers();
     }
@@ -252,19 +261,28 @@
       div.className = "timer";
       div.id = `timer-${label}`;
       div.innerHTML = `
-        <div class="label">
-          <span id="${label}-label-text">${label}</span>
-          <button onclick="editLabel('${label}')">✏️</button>
-        </div>
-        <div class="time" id="${label}-time">00:00:00</div>
-        <div class="target">Target (min): <input type="number" id="${label}-target" min="0" value="${timers[label].target / 60000 || 0}"></div>
-        <div class="flash-option"><label><input type="checkbox" id="${label}-flash" ${timers[label].flashOnTarget ? "checked" : ""}> Flash on target</label></div>
-        <div class="timer-buttons">
-          <button id="${label}-start">Start</button>
-          <button id="${label}-stop">Stop</button>
-          <button id="${label}-reset">Reset</button>
-          <button id="${label}-delete" class="delete-btn">Delete</button>
-        </div>`;
+      <div class="label">
+        <span id="${label}-label-text">${label}</span>
+        <button onclick="editLabel('${label}')">✏️</button>
+      </div>
+      <div class="time" id="${label}-time">00:00:00</div>
+      <div class="target">
+        Target (min): 
+        <input type="number" id="${label}-target" min="0" value="${timers[label].target / 60000 || 0}">
+        <button id="${label}-plus10">+10 min</button>
+      </div>
+      <div class="flash-option">
+        <label><input type="checkbox" id="${label}-flash" ${timers[label].flashOnTarget ? "checked" : ""}> Flash on target</label>
+      </div>
+      <div class="flash-option">
+        <label><input type="checkbox" id="${label}-mask" ${timers[label].maskTime ? "checked" : ""}> Mask time</label>
+      </div>
+      <div class="timer-buttons">
+        <button id="${label}-start">Start</button>
+        <button id="${label}-stop">Stop</button>
+        <button id="${label}-reset">Reset</button>
+        <button id="${label}-delete" class="delete-btn">Delete</button>
+      </div>`;
       timersDiv.appendChild(div);
 
       document.getElementById(`${label}-start`).onclick = () => startTimer(label);
@@ -273,6 +291,12 @@
       document.getElementById(`${label}-delete`).onclick = () => deleteTimer(label);
       document.getElementById(`${label}-target`).oninput = e => { timers[label].target = Number(e.target.value) * 60000; saveTimers(); };
       document.getElementById(`${label}-flash`).onchange = e => { timers[label].flashOnTarget = e.target.checked; saveTimers(); };
+      document.getElementById(`${label}-mask`).onchange = e => { timers[label].maskTime = e.target.checked; saveTimers(); };
+      document.getElementById(`${label}-plus10`).onclick = () => {
+        timers[label].target += 10 * 60000;
+        document.getElementById(`${label}-target`).value = timers[label].target / 60000;
+        saveTimers();
+      };
     }
 
     function editLabel(oldLabel) {
@@ -334,7 +358,7 @@
       if (!timers[label]) return;
       let elapsed = timers[label].elapsed;
       if (timers[label].running) elapsed += Date.now() - timers[label].lastStart;
-      document.getElementById(`${label}-time`).textContent = format(elapsed);
+      document.getElementById(`${label}-time`).textContent = format(elapsed, timers[label].maskTime);
     }
 
     function checkFlashing() {
